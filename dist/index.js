@@ -186,5 +186,4 @@ const App = () => {
     const { activePanel, leftCwd, rightCwd, leftIndex, rightIndex, leftFiles, rightFiles, leftFilesError, rightFilesError, } = useAppState();
     return (_jsxs(Commander, { children: [_jsxs(PanelScreen, { children: [_jsx(FilePanel, { dir: leftCwd, items: leftFiles, selectedIndex: leftIndex, error: leftFilesError, isActive: activePanel === 'left' }), _jsx(FilePanel, { dir: rightCwd, items: rightFiles, selectedIndex: rightIndex, error: rightFilesError, isActive: activePanel === 'right' })] }), _jsx(CommandLine, {}), _jsx(MainMenu, {})] }));
 };
-// Render the Ink application
 render(_jsx(App, {}));

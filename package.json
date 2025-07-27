@@ -1,0 +1,37 @@
+{
+  "name": "tfc",
+  "version": "0.1.0",
+  "description": "Terminal File Commander",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "tfc": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "pnpm build && node dist/index.js",
+    "dev": "tsc --watch",
+    "lint": "eslint . --ext .ts,.tsx",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ink": "^6.0.1",
+    "react": "^19.1.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/react": "^19.1.8",
+    "@types/yargs": "^17.0.32",
+    "eslint": "^8.57.0",
+    "ink-testing-library": "^4.0.0",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3",
+    "vitest": "^3.1.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

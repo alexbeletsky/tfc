@@ -6,13 +6,12 @@ import fs from 'fs/promises';
 import os from 'os'; // Imported by user, kept for potential future use
 import path from 'path';
 
-// Commander component: The main container for the entire application
 const Commander = ({ children }: { children: React.ReactElement[] }) => (
   <Box
     flexDirection="column"
     width="100%"
     height="100%"
-    backgroundColor="black"
+    backgroundColor="blue"
     padding={1}
   >
     {children}
@@ -21,150 +20,154 @@ const Commander = ({ children }: { children: React.ReactElement[] }) => (
 
 // FileTree component: Displays the list of files and directories
 const FileTree = ({
-  items, // Renamed 'tree' to 'items' for consistency with useFileTree output
-  selectedIndex,
+	items,
+	selectedIndex,
 }: {
-  items: { name: string; isDirectory: boolean }[]; // Updated type to include isDirectory
-  selectedIndex: number;
+	items: { name: string; isDirectory: boolean }[]; // Updated type to include isDirectory
+	selectedIndex: number;
 }) => (
-  <Box flexDirection="column" padding={1}>
-    {items.length === 0 ? (
-      <Text color="yellow">No items in this directory.</Text>
-    ) : (
-      items.map((item, index) => {
-        const isSelected = index === selectedIndex;
-        return (
-          <Text
-            key={item.name}
-            color={isSelected ? 'yellow' : 'white'}
-            inverse={isSelected}
-          >
-            {isSelected ? '> ' : '  '} {/* Highlight indicator */}
-            {item.isDirectory ? (
-              <Text color="blue">[{item.name}]</Text>
-            ) : (
-              item.name
-            )}
-          </Text>
-        );
-      })
-    )}
-  </Box>
+	<Box flexDirection="column">
+		{items.length === 0 ? (
+			<Text color="yellow">No items in this directory.</Text>
+		) : (
+			items.map((item, index) => {
+				const isSelected = index === selectedIndex;
+
+				const textColor = isSelected
+					? 'black'
+					: item.isDirectory
+					? 'cyan'
+					: 'white';
+
+				return (
+					<Text
+						key={item.name}
+						color={textColor}
+						backgroundColor={isSelected ? 'cyan' : 'blue'}
+					>
+						{item.name}
+					</Text>
+				);
+			})
+		)}
+	</Box>
 );
 
 // useFileTree hook: Custom hook to read directory contents and manage path
 const useFileTree = (targetCwd: string) => {
-  // Renamed 'cwd' to 'targetCwd' to avoid confusion with state.cwd
-  const [items, setItems] = useState<{ name: string; isDirectory: boolean }[]>(
-    [],
-  );
-  const [error, setError] = useState<string | null>(null);
+	// Renamed 'cwd' to 'targetCwd' to avoid confusion with state.cwd
+	const [items, setItems] = useState<{ name: string; isDirectory: boolean }[]>(
+		[],
+	);
+	const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchFileTree = async () => {
-      try {
-        const dirents = await fs.readdir(targetCwd, { withFileTypes: true });
-        const sortedItems = dirents
-          .map((dirent) => ({
-            name: dirent.name,
-            isDirectory: dirent.isDirectory(),
-          }))
-          .sort((a, b) => {
-            // Sort directories first, then files, both alphabetically
-            if (a.isDirectory && !b.isDirectory) return -1;
-            if (!a.isDirectory && b.isDirectory) return 1;
-            return a.name.localeCompare(b.name);
-          });
+	useEffect(() => {
+		const fetchFileTree = async () => {
+			try {
+				const dirents = await fs.readdir(targetCwd, { withFileTypes: true });
+				const sortedItems = dirents
+					.map((dirent) => ({
+						name: dirent.name,
+						isDirectory: dirent.isDirectory(),
+					}))
+					.sort((a, b) => {
+						// Sort directories first, then files, both alphabetically
+						if (a.isDirectory && !b.isDirectory) return -1;
+						if (!a.isDirectory && b.isDirectory) return 1;
+						return a.name.localeCompare(b.name);
+					});
 
-        // Add '..' for navigating up, only if not at the root
-        const parentDir = path.dirname(targetCwd);
-        const finalItems =
-          targetCwd !== parentDir
-            ? [{ name: '..', isDirectory: true }, ...sortedItems]
-            : sortedItems;
+				// Add '..' for navigating up, only if not at the root
+				const parentDir = path.dirname(targetCwd);
+				const finalItems =
+					targetCwd !== parentDir
+						? [{ name: '..', isDirectory: true }, ...sortedItems]
+						: sortedItems;
 
-        setItems(finalItems);
-        setError(null);
-      } catch (err: any) {
-        setError(`Error reading directory: ${err.message}`);
-        setItems([]);
-      }
-    };
+				setItems(finalItems);
+				setError(null);
+			} catch (err: any) {
+				setError(`Error reading directory: ${err.message}`);
+				setItems([]);
+			}
+		};
 
-    fetchFileTree();
-  }, [targetCwd]);
+		fetchFileTree();
+	}, [targetCwd]);
 
-  return { items, error }; // No longer returns currentPath, as it's managed by useAppState
+	return { items, error }; // No longer returns currentPath, as it's managed by useAppState
 };
 
 // FilePanel component: Represents a single file browsing panel
 const FilePanel = ({
-  dir,
-  items, // Renamed 'files' to 'items' for consistency
-  selectedIndex,
-  isActive,
-  error = null,
+	dir,
+	items, // Renamed 'files' to 'items' for consistency
+	selectedIndex,
+	isActive,
+	error = null,
 }: {
-  dir: string;
-  items: { name: string; isDirectory: boolean }[]; // Updated type
-  selectedIndex: number;
-  isActive: boolean;
-  error?: string | null;
+	dir: string;
+	items: { name: string; isDirectory: boolean }[]; // Updated type
+	selectedIndex: number;
+	isActive: boolean;
+	error?: string | null;
 }) => (
-  <Box
-    flexDirection="column"
-    width="50%"
-    padding={1}
-    borderStyle="round"
-    backgroundColor={isActive ? 'green' : 'grey'} // User's requested background color
-    borderColor={isActive ? 'yellow' : 'grey'} // Highlight border if active
-  >
-    <Text>Current dir: {dir}</Text>
-    {error && <Text color="red">Error: {error}</Text>}
-    {/* Pass items and selectedIndex to FileTree */}
-    <FileTree items={items} selectedIndex={selectedIndex} />
-  </Box>
+	<Box
+		flexDirection="column"
+		width="50%"
+		paddingX={1}
+		borderStyle="round"
+		borderColor={isActive ? 'yellow' : 'grey'} // Highlight border if active
+	>
+		<Text color="white">{dir}</Text>
+		{error && <Text color="red">Error: {error}</Text>}
+		{/* Pass items and selectedIndex to FileTree */}
+		<FileTree items={items} selectedIndex={selectedIndex} />
+	</Box>
 );
 
 // PanelScreen component: Holds the two file panels (renamed from MainScreen by user)
 const PanelScreen = ({ children }: { children: React.ReactElement[] }) => (
-  <Box flexDirection="row" width="100%" height="100%" backgroundColor="cyan">
-    {children}
-  </Box>
+	<Box flexDirection="row" flexGrow={1}>
+		{children}
+	</Box>
 );
 
 // MenuItem component: For the bottom menu bar
 const MenuItem = ({
-  functionKey,
-  label,
+	functionKey,
+	label,
 }: {
-  functionKey: string;
-  label: string;
+	functionKey: string;
+	label: string;
 }) => (
-  <Box padding={1} marginRight={1}>
-    <Text color="white" backgroundColor="blue">
-      {functionKey} - {label}
-    </Text>
-  </Box>
+	<Box paddingX={1}>
+		<Text color="black" backgroundColor="cyan">
+			F{functionKey}
+		</Text>
+		<Text color="white"> {label} </Text>
+	</Box>
 );
 
 // MainMenu component: The bottom menu bar
 const MainMenu = () => {
-  return (
-    <Box width="100%" padding={1} borderStyle="single" backgroundColor="blue">
-      <MenuItem functionKey="1" label="File" />
-      <MenuItem functionKey="2" label="Edit" />
-      <MenuItem functionKey="3" label="View" />
-      <MenuItem functionKey="4" label="Help" />
-    </Box>
-  );
+	return (
+		<Box width="100%" flexDirection="row" paddingX={1}>
+			<MenuItem functionKey="3" label="View" />
+			<MenuItem functionKey="4" label="Edit" />
+			<MenuItem functionKey="5" label="Copy" />
+			<MenuItem functionKey="6" label="Move" />
+			<MenuItem functionKey="7" label="MkDir" />
+			<MenuItem functionKey="8" label="Delete" />
+		</Box>
+	);
 };
 
 // CommandLine component: The command input area
 const CommandLine = () => (
-  <Box padding={1} borderStyle="single" backgroundColor="grey">
-    <Text color="white">$ </Text>
-  </Box>
+	<Box paddingX={1}>
+		<Text color="white">$ </Text>
+	</Box>
 );
 
 // useAppState hook: Manages the global application state, like active panel and file navigation
@@ -172,7 +175,7 @@ const useAppState = () => {
   const [state, setState] = React.useState({
     activePanel: 'left' as 'left' | 'right', // Explicitly type activePanel
     leftCwd: '/',
-    rightCwd: os.homedir(), // Start right panel in user's home directory
+    rightCwd: '/', // os.homedir(), // Start right panel in user's home directory
     leftIndex: 0,
     rightIndex: 0,
     leftFiles: [] as { name: string; isDirectory: boolean }[], // Updated type
@@ -183,14 +186,13 @@ const useAppState = () => {
   const { items: leftFiles, error: leftFilesError } = useFileTree(
     state.leftCwd,
   );
+
   const { items: rightFiles, error: rightFilesError } = useFileTree(
     state.rightCwd,
   );
 
   const { exit } = useApp();
 
-  // Effect to update file lists in state when useFileTree provides new data
-  // This is crucial because useFileTree is asynchronous
   React.useEffect(() => {
     setState((prev) => ({
       ...prev,
@@ -249,7 +251,6 @@ const useAppState = () => {
           ), // Corrected to Math.min
         }));
       } else {
-        // activePanel === 'right'
         setState((prev) => ({
           ...prev,
           rightIndex: Math.min(

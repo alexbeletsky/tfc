@@ -1,10 +1,12 @@
 #!/usr/bin/env node
+// import os from 'os';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { render, Text, Box, useInput, useApp } from 'ink';
+import React, { useState, useEffect } from 'react';
+import { render, Text, Box, useInput, useApp, useStdout } from 'ink';
 import fs from 'fs/promises';
-import os from 'os'; // Imported by user, kept for potential future use
 import path from 'path';
+
+const PANEL_PADDING = 4;
 
 const Commander = ({ children }: { children: React.ReactElement[] }) => (
   <Box
@@ -18,171 +20,178 @@ const Commander = ({ children }: { children: React.ReactElement[] }) => (
   </Box>
 );
 
-// FileTree component: Displays the list of files and directories
 const FileTree = ({
-	items,
-	selectedIndex,
+  items,
+  selectedIndex,
 }: {
-	items: { name: string; isDirectory: boolean }[]; // Updated type to include isDirectory
-	selectedIndex: number;
+  items: { name: string; isDirectory: boolean }[];
+  selectedIndex: number;
 }) => (
-	<Box flexDirection="column">
-		{items.length === 0 ? (
-			<Text color="yellow">No items in this directory.</Text>
-		) : (
-			items.map((item, index) => {
-				const isSelected = index === selectedIndex;
+  <Box flexDirection="column">
+    {items.length === 0 ? (
+      <Text color="yellow">No items in this directory.</Text>
+    ) : (
+      items.map((item, index) => {
+        const isSelected = index === selectedIndex;
 
-				const textColor = isSelected
-					? 'black'
-					: item.isDirectory
-					? 'cyan'
-					: 'white';
+        const textColor = isSelected
+          ? 'black'
+          : item.isDirectory
+            ? 'cyan'
+            : 'white';
 
-				return (
-					<Text
-						key={item.name}
-						color={textColor}
-						backgroundColor={isSelected ? 'cyan' : 'blue'}
-					>
-						{item.name}
-					</Text>
-				);
-			})
-		)}
-	</Box>
+        return (
+          <Text
+            key={item.name}
+            color={textColor}
+            backgroundColor={isSelected ? 'cyan' : 'blue'}
+          >
+            {item.name}
+          </Text>
+        );
+      })
+    )}
+  </Box>
 );
 
 // useFileTree hook: Custom hook to read directory contents and manage path
 const useFileTree = (targetCwd: string) => {
-	// Renamed 'cwd' to 'targetCwd' to avoid confusion with state.cwd
-	const [items, setItems] = useState<{ name: string; isDirectory: boolean }[]>(
-		[],
-	);
-	const [error, setError] = useState<string | null>(null);
+  // Renamed 'cwd' to 'targetCwd' to avoid confusion with state.cwd
+  const [items, setItems] = useState<{ name: string; isDirectory: boolean }[]>(
+    [],
+  );
+  const [error, setError] = useState<string | null>(null);
 
-	useEffect(() => {
-		const fetchFileTree = async () => {
-			try {
-				const dirents = await fs.readdir(targetCwd, { withFileTypes: true });
-				const sortedItems = dirents
-					.map((dirent) => ({
-						name: dirent.name,
-						isDirectory: dirent.isDirectory(),
-					}))
-					.sort((a, b) => {
-						// Sort directories first, then files, both alphabetically
-						if (a.isDirectory && !b.isDirectory) return -1;
-						if (!a.isDirectory && b.isDirectory) return 1;
-						return a.name.localeCompare(b.name);
-					});
+  useEffect(() => {
+    const fetchFileTree = async () => {
+      try {
+        const dirents = await fs.readdir(targetCwd, { withFileTypes: true });
+        const sortedItems = dirents
+          .map((dirent) => ({
+            name: dirent.name,
+            isDirectory: dirent.isDirectory(),
+          }))
+          .sort((a, b) => {
+            // Sort directories first, then files, both alphabetically
+            if (a.isDirectory && !b.isDirectory) return -1;
+            if (!a.isDirectory && b.isDirectory) return 1;
 
-				// Add '..' for navigating up, only if not at the root
-				const parentDir = path.dirname(targetCwd);
-				const finalItems =
-					targetCwd !== parentDir
-						? [{ name: '..', isDirectory: true }, ...sortedItems]
-						: sortedItems;
+            return a.name.localeCompare(b.name);
+          });
 
-				setItems(finalItems);
-				setError(null);
-			} catch (err: any) {
-				setError(`Error reading directory: ${err.message}`);
-				setItems([]);
-			}
-		};
+        // Add '..' for navigating up, only if not at the root
+        const parentDir = path.dirname(targetCwd);
 
-		fetchFileTree();
-	}, [targetCwd]);
+        const finalItems =
+          targetCwd !== parentDir
+            ? [{ name: '..', isDirectory: true }, ...sortedItems]
+            : sortedItems;
 
-	return { items, error }; // No longer returns currentPath, as it's managed by useAppState
+        setItems(finalItems);
+        setError(null);
+      } catch (err: any) {
+        setError(`Error reading directory: ${err.message}`);
+        setItems([]);
+      }
+    };
+
+    fetchFileTree();
+  }, [targetCwd]);
+
+  return { items, error };
 };
 
-// FilePanel component: Represents a single file browsing panel
 const FilePanel = ({
-	dir,
-	items, // Renamed 'files' to 'items' for consistency
-	selectedIndex,
-	isActive,
-	error = null,
+  dir,
+  items,
+  selectedIndex,
+  scrollOffset,
+  contentHeight,
+  isActive,
+  error = null,
 }: {
-	dir: string;
-	items: { name: string; isDirectory: boolean }[]; // Updated type
-	selectedIndex: number;
-	isActive: boolean;
-	error?: string | null;
-}) => (
-	<Box
-		flexDirection="column"
-		width="50%"
-		paddingX={1}
-		borderStyle="round"
-		borderColor={isActive ? 'yellow' : 'grey'} // Highlight border if active
-	>
-		<Text color="white">{dir}</Text>
-		{error && <Text color="red">Error: {error}</Text>}
-		{/* Pass items and selectedIndex to FileTree */}
-		<FileTree items={items} selectedIndex={selectedIndex} />
-	</Box>
-);
+  dir: string;
+  items: { name: string; isDirectory: boolean }[];
+  selectedIndex: number;
+  scrollOffset: number;
+  contentHeight: number;
+  isActive: boolean;
+  error?: string | null;
+}) => {
+  const visibleItems = items.slice(scrollOffset, scrollOffset + contentHeight);
 
-// PanelScreen component: Holds the two file panels (renamed from MainScreen by user)
-const PanelScreen = ({ children }: { children: React.ReactElement[] }) => (
-	<Box flexDirection="row" flexGrow={1}>
-		{children}
-	</Box>
-);
-
-// MenuItem component: For the bottom menu bar
-const MenuItem = ({
-	functionKey,
-	label,
-}: {
-	functionKey: string;
-	label: string;
-}) => (
-	<Box paddingX={1}>
-		<Text color="black" backgroundColor="cyan">
-			F{functionKey}
-		</Text>
-		<Text color="white"> {label} </Text>
-	</Box>
-);
-
-// MainMenu component: The bottom menu bar
-const MainMenu = () => {
-	return (
-		<Box width="100%" flexDirection="row" paddingX={1}>
-			<MenuItem functionKey="3" label="View" />
-			<MenuItem functionKey="4" label="Edit" />
-			<MenuItem functionKey="5" label="Copy" />
-			<MenuItem functionKey="6" label="Move" />
-			<MenuItem functionKey="7" label="MkDir" />
-			<MenuItem functionKey="8" label="Delete" />
-		</Box>
-	);
+  return (
+    <Box
+      flexDirection="column"
+      width="50%"
+      paddingX={1}
+      borderStyle="round"
+      borderColor={isActive ? 'yellow' : 'grey'}
+    >
+      <Text color="white">{dir}</Text>
+      {error && <Text color="red">Error: {error}</Text>}
+      <FileTree
+        items={visibleItems}
+        selectedIndex={selectedIndex - scrollOffset}
+      />
+    </Box>
+  );
 };
 
-// CommandLine component: The command input area
-const CommandLine = () => (
-	<Box paddingX={1}>
-		<Text color="white">$ </Text>
-	</Box>
+const PanelScreen = ({ children }: { children: React.ReactElement[] }) => (
+  <Box flexDirection="row" flexGrow={1}>
+    {children}
+  </Box>
 );
 
-// useAppState hook: Manages the global application state, like active panel and file navigation
+const MenuItem = ({
+  functionKey,
+  label,
+}: {
+  functionKey: string;
+  label: string;
+}) => (
+  <Box paddingX={1}>
+    <Text color="black" backgroundColor="cyan">
+      F{functionKey}
+    </Text>
+    <Text color="white"> {label} </Text>
+  </Box>
+);
+
+const MainMenu = () => {
+  return (
+    <Box width="100%" flexDirection="row" paddingX={1}>
+      <MenuItem functionKey="3" label="View" />
+      <MenuItem functionKey="4" label="Edit" />
+      <MenuItem functionKey="5" label="Copy" />
+      <MenuItem functionKey="6" label="Move" />
+      <MenuItem functionKey="7" label="MkDir" />
+      <MenuItem functionKey="8" label="Delete" />
+    </Box>
+  );
+};
+
+const CommandLine = () => (
+  <Box paddingX={1}>
+    <Text color="white">$ </Text>
+  </Box>
+);
+
 const useAppState = () => {
   const [state, setState] = React.useState({
     activePanel: 'left' as 'left' | 'right', // Explicitly type activePanel
     leftCwd: '/',
     rightCwd: '/', // os.homedir(), // Start right panel in user's home directory
     leftIndex: 0,
+    leftScroll: 0,
     rightIndex: 0,
+    rightScroll: 0,
     leftFiles: [] as { name: string; isDirectory: boolean }[], // Updated type
     rightFiles: [] as { name: string; isDirectory: boolean }[], // Updated
   });
 
-  // Fetch file trees for both panels using the useFileTree hook
+  // file contents for panels
   const { items: leftFiles, error: leftFilesError } = useFileTree(
     state.leftCwd,
   );
@@ -191,6 +200,13 @@ const useAppState = () => {
     state.rightCwd,
   );
 
+  // Calculate the content height for panels
+  const { stdout } = useStdout();
+  const panelContentHeight = Math.floor(stdout.rows) - PANEL_PADDING;
+
+  console.log(`Panel content height: ${panelContentHeight}`);
+
+  // exit hook
   const { exit } = useApp();
 
   React.useEffect(() => {
@@ -208,6 +224,46 @@ const useAppState = () => {
       rightFilesError: rightFilesError,
     }));
   }, [rightFiles, rightFilesError]);
+
+  // Add a useEffect to handle scrolling
+  React.useEffect(() => {
+    const activeState =
+      state.activePanel === 'left'
+        ? {
+            index: state.leftIndex,
+            scroll: state.leftScroll,
+          }
+        : {
+            index: state.rightIndex,
+            scroll: state.rightScroll,
+          };
+
+    const scrollKey =
+      state.activePanel === 'left' ? 'leftScroll' : 'rightScroll';
+
+    let newScroll = activeState.scroll;
+
+    // Scroll down if selection is out of view
+    if (activeState.index >= activeState.scroll + panelContentHeight) {
+      newScroll = activeState.index - panelContentHeight + 1;
+    }
+    // Scroll up if selection is out of view
+    else if (activeState.index < activeState.scroll) {
+      newScroll = activeState.index;
+    }
+
+    if (newScroll !== activeState.scroll) {
+      setState((prev) => ({
+        ...prev,
+        [scrollKey]: newScroll,
+      }));
+    }
+  }, [
+    state.leftIndex,
+    state.rightIndex,
+    state.activePanel,
+    panelContentHeight,
+  ]);
 
   const togglePanel = () => {
     setState((prev) => ({
@@ -284,6 +340,7 @@ const useAppState = () => {
             ...prev,
             [state.activePanel === 'left' ? 'leftCwd' : 'rightCwd']: newPath,
             [state.activePanel === 'left' ? 'leftIndex' : 'rightIndex']: 0,
+            [state.activePanel === 'left' ? 'leftScroll' : 'rightScroll']: 0,
           }));
         } else {
           // If it's a file, you can add logic here to open it or perform other actions
@@ -307,10 +364,10 @@ const useAppState = () => {
     rightFiles,
     leftFilesError,
     rightFilesError,
+    panelContentHeight: panelContentHeight, // Calculate content height based on terminal size
   };
 };
 
-// App component: The root component of the Ink application
 const App = () => {
   const {
     activePanel,
@@ -320,8 +377,11 @@ const App = () => {
     rightIndex,
     leftFiles,
     rightFiles,
+    leftScroll,
+    rightScroll,
     leftFilesError,
     rightFilesError,
+    panelContentHeight,
   } = useAppState();
 
   return (
@@ -331,6 +391,8 @@ const App = () => {
           dir={leftCwd}
           items={leftFiles} // Pass items
           selectedIndex={leftIndex}
+          scrollOffset={leftScroll}
+          contentHeight={panelContentHeight}
           error={leftFilesError}
           isActive={activePanel === 'left'}
         />
@@ -338,6 +400,8 @@ const App = () => {
           dir={rightCwd}
           items={rightFiles} // Pass items
           selectedIndex={rightIndex}
+          scrollOffset={rightScroll}
+          contentHeight={panelContentHeight}
           error={rightFilesError}
           isActive={activePanel === 'right'}
         />
